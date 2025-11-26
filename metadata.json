@@ -1,0 +1,5 @@
+{
+  "name": "PromptAlchemist",
+  "description": "A professional prompt engineering tool that optimizes raw inputs into high-quality, structured prompts using distinct personas and MECE-compliant configuration.",
+  "requestFramePermissions": []
+}
