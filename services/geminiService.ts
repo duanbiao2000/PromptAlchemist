@@ -53,21 +53,30 @@ export const optimizePromptWithGemini = async (
     });
 
     const text = response.text;
-    if (!text) throw new Error("No response from Gemini");
+    if (!text) throw new Error("EMPTY_RESPONSE");
     
     return JSON.parse(text) as OptimizedPrompt[];
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
-    throw error;
+    
+    let errorMessage = "An unexpected error occurred during prompt optimization.";
+    
+    if (error.message?.includes("API_KEY")) {
+      errorMessage = "Invalid or missing API Key. Please check your configuration.";
+    } else if (error.message?.includes("quota") || error.status === 429) {
+      errorMessage = "API Quota exceeded. Please try again later.";
+    } else if (error.message?.includes("safety") || error.status === 400) {
+      errorMessage = "The prompt triggered safety filters. Please refine your input.";
+    } else if (error.message === "EMPTY_RESPONSE") {
+      errorMessage = "The AI returned an empty response. Please try again.";
+    }
+
+    throw new Error(errorMessage);
   }
 };
 
 // Simulated analysis function (for the SOP phase)
-// In a real scenario, this could also be an API call to 'gemini-3-pro-preview' for deeper reasoning
 export const analyzePromptRobustness = async (rawPrompt: string): Promise<{ score: number, analysis: string }> => {
-  // Simulating a quick API call or logic here for the "Pre-analysis" phase
-  // We will use a lightweight prompt to get this data
-  
   try {
      const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -88,6 +97,7 @@ export const analyzePromptRobustness = async (rawPrompt: string): Promise<{ scor
     const text = response.text;
     return text ? JSON.parse(text) : { score: 50, analysis: "Could not analyze." };
   } catch (e) {
+    console.warn("Analysis failed, falling back to default", e);
     return { score: 50, analysis: "Basic prompt detected. Lacks explicit constraints." };
   }
 };

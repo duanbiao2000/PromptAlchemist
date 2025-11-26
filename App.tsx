@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { UserConfiguration, OptimizedPrompt, DesignSOP } from './types';
+import { UserConfiguration, OptimizedPrompt, DesignSOP, HistoryItem } from './types';
 import { DEFAULT_CONFIG, INITIAL_SOP_STEPS } from './constants';
 import { optimizePromptWithGemini, analyzePromptRobustness } from './services/geminiService';
 import ConfigPanel from './components/ConfigPanel';
 import ResultCard from './components/ResultCard';
 import SopModal from './components/SopModal';
-import { Sparkles, ArrowRight, Activity, Beaker } from 'lucide-react';
+import HistoryDrawer from './components/HistoryDrawer';
+import { Sparkles, ArrowRight, Activity, Beaker, Clock, AlertCircle } from 'lucide-react';
 
 export default function App() {
   const [rawPrompt, setRawPrompt] = useState('');
@@ -14,14 +15,58 @@ export default function App() {
   const [isSopOpen, setIsSopOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  // History State
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
   // State for SOP progression simulation
   const [sopSteps, setSopSteps] = useState<DesignSOP[]>(INITIAL_SOP_STEPS);
   const [analysisData, setAnalysisData] = useState<{ score: number; analysis: string } | null>(null);
 
+  // Load history from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('prompt_history');
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load history", e);
+      }
+    }
+  }, []);
+
+  // Save history to localStorage
+  const saveToHistory = (newResults: OptimizedPrompt[]) => {
+    const newItem: HistoryItem = {
+      id: Date.now().toString(),
+      timestamp: Date.now(),
+      rawPrompt,
+      config: { ...config },
+      results: newResults
+    };
+    const updated = [newItem, ...history].slice(0, 50); // Keep last 50
+    setHistory(updated);
+    localStorage.setItem('prompt_history', JSON.stringify(updated));
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    localStorage.removeItem('prompt_history');
+  };
+
+  const restoreHistoryItem = (item: HistoryItem) => {
+    setRawPrompt(item.rawPrompt);
+    setConfig(item.config);
+    setResults(item.results);
+    setErrorMsg(null);
+  };
+
   // Handlers
   const handleStartProcess = async () => {
     if (!rawPrompt.trim()) return;
+    setErrorMsg(null);
     
     setIsSopOpen(true);
     setIsAnalyzing(true);
@@ -49,24 +94,26 @@ export default function App() {
   const handleConfirmAndGenerate = async () => {
     setIsSopOpen(false); // Close modal
     setIsGenerating(true); // Start main loading state on dashboard
+    setErrorMsg(null);
 
     try {
       // Execute the generation
       const optimized = await optimizePromptWithGemini(rawPrompt, config);
       setResults(optimized);
-    } catch (error) {
+      saveToHistory(optimized);
+    } catch (error: any) {
       console.error("Generation failed", error);
-      alert("Failed to generate prompts. Please check your API key or connection.");
+      setErrorMsg(error.message || "An unexpected error occurred.");
     } finally {
       setIsGenerating(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 relative">
       
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-brand-500 p-2 rounded-lg">
@@ -77,9 +124,16 @@ export default function App() {
             </h1>
           </div>
           <div className="flex items-center gap-4 text-sm text-slate-500">
-             <span className="hidden md:inline-flex items-center gap-1">
+             <button 
+               onClick={() => setIsHistoryOpen(true)}
+               className="flex items-center gap-1.5 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors"
+             >
+                <Clock className="w-4 h-4 text-slate-500" />
+                <span className="hidden sm:inline">History</span>
+             </button>
+             <span className="hidden md:inline-flex items-center gap-1 border-l border-slate-200 pl-4">
                <Activity className="w-4 h-4 text-emerald-500" />
-               System Status: Operational
+               <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">System Active</span>
              </span>
           </div>
         </div>
@@ -87,24 +141,35 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
-        {/* Intro / Action Plan Section (Post-code requirement) */}
-        {results.length > 0 && (
-          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex flex-col md:flex-row gap-4 text-sm text-indigo-900">
-            <div className="font-semibold whitespace-nowrap">Suggested Action Plan:</div>
-            <ul className="flex flex-col md:flex-row gap-4 list-disc md:list-none ml-4 md:ml-0">
-              <li className="flex gap-2">
-                <span className="font-bold text-indigo-600">A.</span>
-                <span>Test "The Structural Architect" variation for automation tasks.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="font-bold text-indigo-600">B.</span>
-                <span>Use "The Critical Analyst" to identify potential logic gaps.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="font-bold text-indigo-600">C.</span>
-                <span>Refine configuration constraints if outputs are too generic.</span>
-              </li>
-            </ul>
+        {/* Error Message Display */}
+        {errorMsg && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-3 animate-pulse">
+            <AlertCircle className="w-5 h-5" />
+            <span className="font-medium">{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Action Plan Section (Dynamic) */}
+        {results.length > 0 && !isGenerating && (
+          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl p-5 flex flex-col md:flex-row gap-6 text-sm text-indigo-900 shadow-sm">
+            <div className="font-semibold whitespace-nowrap flex items-center gap-2">
+              <span className="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">!</span>
+              Suggested Action Plan:
+            </div>
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white/60 p-3 rounded-lg border border-indigo-100">
+                 <strong className="block text-indigo-700 mb-1">1. Test & Validate</strong>
+                 <span className="text-slate-600 text-xs">Run 'Structural Architect' prompt first for baseline performance.</span>
+              </div>
+              <div className="bg-white/60 p-3 rounded-lg border border-indigo-100">
+                 <strong className="block text-indigo-700 mb-1">2. Edge Case Check</strong>
+                 <span className="text-slate-600 text-xs">Compare 'Critical Analyst' output to find potential logic gaps.</span>
+              </div>
+               <div className="bg-white/60 p-3 rounded-lg border border-indigo-100">
+                 <strong className="block text-indigo-700 mb-1">3. Refine Context</strong>
+                 <span className="text-slate-600 text-xs">If results are too generic, add specific constraints in Config.</span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -114,7 +179,7 @@ export default function App() {
           <div className="lg:col-span-5 space-y-6">
             
             {/* Input Area */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm transition-shadow hover:shadow-md">
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Raw Prompt Input
               </label>
@@ -128,7 +193,7 @@ export default function App() {
                  <button
                   onClick={handleStartProcess}
                   disabled={!rawPrompt.trim() || isGenerating}
-                  className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-lg hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-slate-900/20"
+                  className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-lg hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-slate-900/20 active:scale-95"
                 >
                   {isGenerating ? (
                     'Processing...' 
@@ -164,7 +229,7 @@ export default function App() {
               <div className="grid grid-cols-1 gap-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold text-slate-800">Optimized Results</h2>
-                  <span className="text-xs font-mono bg-slate-200 px-2 py-1 rounded text-slate-600">3 Variations Generated</span>
+                  <span className="text-xs font-mono bg-brand-50 text-brand-700 px-2 py-1 rounded border border-brand-100">3 Variations Generated</span>
                 </div>
                 {results.map((res, idx) => (
                   <ResultCard key={idx} result={res} index={idx} />
@@ -184,9 +249,19 @@ export default function App() {
       <SopModal 
         isOpen={isSopOpen}
         onConfirm={handleConfirmAndGenerate}
+        onCancel={() => setIsSopOpen(false)}
         steps={sopSteps}
         isAnalyzing={isAnalyzing}
         analysisData={analysisData}
+      />
+
+      {/* History Drawer */}
+      <HistoryDrawer 
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        history={history}
+        onSelect={restoreHistoryItem}
+        onClear={clearHistory}
       />
 
     </div>

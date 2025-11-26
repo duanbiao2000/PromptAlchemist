@@ -43,3 +43,16 @@ export interface AnalysisReport {
   robustnessAnalysis: string;
   improvementStrategy: string;
 }
+
+export interface HistoryItem {
+  id: string;
+  timestamp: number;
+  rawPrompt: string;
+  config: UserConfiguration;
+  results: OptimizedPrompt[];
+}
+
+export interface FeedbackData {
+  rating: 'up' | 'down' | null;
+  comment: string;
+}

@@ -1,16 +1,17 @@
 import React from 'react';
 import { DesignSOP } from '../types';
-import { CheckCircle2, Circle, Loader2, ShieldCheck, Activity } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, ShieldCheck, Activity, ArrowLeft } from 'lucide-react';
 
 interface SopModalProps {
   isOpen: boolean;
   steps: DesignSOP[];
   onConfirm: () => void;
+  onCancel: () => void;
   isAnalyzing: boolean;
   analysisData: { score: number; analysis: string } | null;
 }
 
-const SopModal: React.FC<SopModalProps> = ({ isOpen, steps, onConfirm, isAnalyzing, analysisData }) => {
+const SopModal: React.FC<SopModalProps> = ({ isOpen, steps, onConfirm, onCancel, isAnalyzing, analysisData }) => {
   if (!isOpen) return null;
 
   return (
@@ -18,14 +19,24 @@ const SopModal: React.FC<SopModalProps> = ({ isOpen, steps, onConfirm, isAnalyzi
       <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="bg-slate-50 p-6 border-b border-slate-100">
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <ShieldCheck className="text-brand-600" />
-            Robustness & Performance SOP
-          </h2>
-          <p className="text-slate-500 text-sm mt-1">
-            Pre-flight analysis to ensure prompt integrity before generation.
-          </p>
+        <div className="bg-slate-50 p-6 border-b border-slate-100 flex items-start gap-4">
+          <button 
+            onClick={onCancel}
+            className="mt-1 flex items-center gap-1.5 px-3 py-1.5 -ml-2 text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 rounded-lg transition-colors group"
+            title="Back to Edit"
+          >
+            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+            <span className="text-sm font-medium">Back</span>
+          </button>
+          <div className="flex-1">
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              <ShieldCheck className="text-brand-600" />
+              Robustness & Performance SOP
+            </h2>
+            <p className="text-slate-500 text-sm mt-1">
+              Pre-flight analysis to ensure prompt integrity before generation.
+            </p>
+          </div>
         </div>
 
         {/* Content */}
@@ -99,7 +110,13 @@ const SopModal: React.FC<SopModalProps> = ({ isOpen, steps, onConfirm, isAnalyzi
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+        <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2.5 rounded-lg text-slate-600 hover:bg-slate-200 font-medium transition-colors"
+          >
+            Back to Edit
+          </button>
           <button 
             onClick={onConfirm}
             disabled={isAnalyzing}
